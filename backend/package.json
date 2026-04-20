@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Retail AI Content & Search POC — Backend",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"

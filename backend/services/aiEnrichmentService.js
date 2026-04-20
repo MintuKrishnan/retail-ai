@@ -9,16 +9,16 @@
 // ─── MOCK ENRICHMENT ──────────────────────────────────────────────────────────
 
 const TAG_MAP = {
-  jacket: ["outerwear", "layering", "fashion", "winter"],
-  sneaker: ["footwear", "casual", "sport", "streetwear"],
-  shoe: ["footwear", "fashion", "lifestyle"],
-  watch: ["accessories", "timekeeping", "luxury", "wearable"],
-  bag: ["accessories", "carry", "fashion", "storage"],
-  shirt: ["tops", "casual", "apparel", "everyday"],
-  dress: ["womenswear", "occasion", "apparel", "style"],
-  laptop: ["electronics", "computing", "productivity", "tech"],
+  jacket:    ["outerwear", "layering", "fashion", "winter"],
+  sneaker:   ["footwear", "casual", "sport", "streetwear"],
+  shoe:      ["footwear", "fashion", "lifestyle"],
+  watch:     ["accessories", "timekeeping", "luxury", "wearable"],
+  bag:       ["accessories", "carry", "fashion", "storage"],
+  shirt:     ["tops", "casual", "apparel", "everyday"],
+  dress:     ["womenswear", "occasion", "apparel", "style"],
+  laptop:    ["electronics", "computing", "productivity", "tech"],
   headphone: ["audio", "electronics", "music", "wireless"],
-  camera: ["photography", "electronics", "imaging", "creative"],
+  camera:    ["photography", "electronics", "imaging", "creative"],
 };
 
 function mockEnrich(product) {
@@ -47,22 +47,22 @@ function mockEnrich(product) {
   const seo_title = `Buy ${product.title} Online | Best Price & Fast Shipping`;
 
   return {
-    id: product.id,
-    title: product.title,
+    id:                product.id,
+    title:             product.title,
     description,
     seo_title,
     tags,
-    image: product.image || `https://picsum.photos/seed/${product.id}/400/300`,
-    price: product.price || null,
-    category: product.category || "general",
-    enriched_at: new Date().toISOString(),
+    image:             product.image || `https://picsum.photos/seed/${product.id}/400/300`,
+    price:             product.price || null,
+    category:          product.category || "general",
+    enriched_at:       new Date().toISOString(),
     enrichment_source: "mock", // change to "bedrock" when live
   };
 }
 
 // ─── AWS BEDROCK SCAFFOLD (plug in later) ────────────────────────────────────
 //
-// const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
+// import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 //
 // async function bedrockEnrich(product) {
 //   const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
@@ -77,13 +77,13 @@ function mockEnrich(product) {
 //     - tags (array of 5-8 relevant lowercase keywords)
 //   `;
 //   const command = new InvokeModelCommand({
-//     modelId: process.env.BEDROCK_MODEL_ID || "anthropic.claude-3-sonnet-20240229-v1:0",
-//     body: JSON.stringify({ prompt, max_tokens: 300 }),
+//     modelId:     process.env.BEDROCK_MODEL_ID || "anthropic.claude-3-sonnet-20240229-v1:0",
+//     body:        JSON.stringify({ prompt, max_tokens: 300 }),
 //     contentType: "application/json",
-//     accept: "application/json",
+//     accept:      "application/json",
 //   });
 //   const response = await client.send(command);
-//   const parsed = JSON.parse(new TextDecoder().decode(response.body));
+//   const parsed   = JSON.parse(new TextDecoder().decode(response.body));
 //   return { ...product, ...parsed, enrichment_source: "bedrock" };
 // }
 
@@ -103,4 +103,4 @@ async function enrichProduct(product) {
   return mockEnrich(product);
 }
 
-module.exports = { enrichProduct };
+export { enrichProduct };

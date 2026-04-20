@@ -1,33 +1,30 @@
-import { useState } from 'react'
-import Header from './components/Header'
-import SearchBar from './components/SearchBar'
-import ProductGrid from './components/ProductGrid'
-import ProductModal from './components/ProductModal'
-import Toast from './components/Toast'
-import { EmptyState, LoadingState, NoResultsState } from './components/States'
-import { useProducts } from './hooks/useProducts'
+import { useState } from "react";
+import Header from "./components/Header";
+import SearchBar from "./components/SearchBar";
+import ProductGrid from "./components/ProductGrid";
+import ProductModal from "./components/ProductModal";
+import Toast from "./components/Toast";
+import AmplienceStatus from "./components/AmplienceStatus";
+import { EmptyState, LoadingState, NoResultsState } from "./components/States";
+import { useProducts } from "./hooks/useProducts";
 
 export default function App() {
   const {
-    products,
-    displayed,
-    status,
-    query,
-    toast,
-    loadProducts,
-    handleSearch,
-    clearSearch,
-  } = useProducts()
+    products, displayed, status, query, toast,
+    loadProducts, handleSearch, clearSearch,
+  } = useProducts();
 
-  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
-  const isLoading  = status === 'loading'
-  const isIdle     = status === 'idle' || status === 'error'
-  const isReady    = status === 'ready'
-  const noResults  = isReady && query && displayed.length === 0
+  const isLoading  = status === "loading";
+  const isIdle     = status === "idle" || status === "error";
+  const isReady    = status === "ready";
+  const noResults  = isReady && query && displayed.length === 0;
 
   return (
     <div className="min-h-screen bg-canvas font-body">
+      {/* Amplience connection status bar */}
+      <AmplienceStatus />
 
       <Header onLoad={loadProducts} loading={isLoading} />
 
@@ -40,9 +37,9 @@ export default function App() {
       />
 
       <main className="max-w-6xl mx-auto px-6 py-12 pb-20">
-        {isIdle     && <EmptyState />}
-        {isLoading  && <LoadingState />}
-        {noResults  && <NoResultsState />}
+        {isIdle    && <EmptyState />}
+        {isLoading && <LoadingState />}
+        {noResults && <NoResultsState />}
         {isReady && !noResults && (
           <ProductGrid
             products={displayed}
@@ -60,7 +57,6 @@ export default function App() {
       )}
 
       <Toast toast={toast} />
-
     </div>
-  )
+  );
 }

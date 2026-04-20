@@ -1,78 +1,204 @@
 /**
  * Amplience Integration Service
+ * REST API — Management API v2
  *
- * Currently mocked with console.log + simulated axios call.
- * To plug in real Amplience:
- *  1. Set AMPLIENCE_HUB_ID and AMPLIENCE_API_KEY in your .env
- *  2. Replace the mock block below with the real axios call (scaffold provided)
+ * Flow:
+ *   1. getAccessToken()     → POST auth.amplience.net/oauth/token
+ *   2. createContentItem()  → POST api.amplience.net/v2/content/hubs/{hubId}/content-repositories/{repoId}/content-items
+ *   3. getContentItem()     → GET  api.amplience.net/v2/content/content-items/{id}
+ *   4. updateContentItem()  → PATCH api.amplience.net/v2/content/content-items/{id}
+ *   5. publishContentItem() → POST api.amplience.net/v2/content/content-items/{id}/publish
+ *
+ * Env vars are read lazily inside each function (not at module load time)
+ * so dotenv has time to populate process.env before they are accessed.
+ *
+ * To go live: fill AMPLIENCE_* vars in .env — zero code changes needed.
  */
 
-const axios = require("axios");
+import axios from "axios";
 
-// ─── REAL AMPLIENCE SCAFFOLD (plug in later) ─────────────────────────────────
-//
-// async function pushToAmplienceReal(product) {
-//   const hubId = process.env.AMPLIENCE_HUB_ID;
-//   const apiKey = process.env.AMPLIENCE_API_KEY;
-//   const url = `https://api.amplience.net/v2/content/hubs/${hubId}/content-items`;
-//
-//   const payload = {
-//     label: product.title,
-//     body: {
-//       _meta: { schema: "https://yourschema.amplience.net/product.json" },
-//       title: product.title,
-//       description: product.description,
-//       seoTitle: product.seo_title,
-//       tags: product.tags,
-//       imageUrl: product.image,
-//     },
-//     locale: "en-US",
-//   };
-//
-//   const response = await axios.post(url, payload, {
-//     headers: {
-//       Authorization: `Bearer ${apiKey}`,
-//       "Content-Type": "application/json",
-//     },
-//   });
-//
-//   return response.data;
-// }
+const AUTH_URL = "https://auth.amplience.net/oauth/token";
+const API_BASE = "https://api.amplience.net/v2/content";
 
-// ─── MOCK IMPLEMENTATION ─────────────────────────────────────────────────────
+// Simple in-memory token cache
+let _tokenCache = { token: null, expiresAt: 0 };
 
-/**
- * Pushes enriched product to Amplience CMS.
- * @param {Object} product - Enriched product object
- */
+// ─── MOCK MODE DETECTION ─────────────────────────────────────────────────────
+function isMockMode() {
+  const id     = process.env.AMPLIENCE_CLIENT_ID;
+  const secret = process.env.AMPLIENCE_CLIENT_SECRET;
+  return !id || id === "your_client_id" || !secret || secret === "your_client_secret";
+}
+
+// ─── 1. AUTH ─────────────────────────────────────────────────────────────────
+async function getAccessToken() {
+  const now = Date.now();
+  if (_tokenCache.token && now < _tokenCache.expiresAt) return _tokenCache.token;
+
+  if (isMockMode()) {
+    console.log("  [Amplience Auth] MOCK mode — using fake token");
+    _tokenCache = { token: "mock-token-abc123", expiresAt: now + 270_000 };
+    return _tokenCache.token;
+  }
+
+  const params = new URLSearchParams({
+    grant_type:    "client_credentials",
+    client_id:     process.env.AMPLIENCE_CLIENT_ID,
+    client_secret: process.env.AMPLIENCE_CLIENT_SECRET,
+  });
+
+  const res = await axios.post(AUTH_URL, params.toString(), {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  });
+
+  const { access_token, expires_in } = res.data;
+  _tokenCache = { token: access_token, expiresAt: now + (expires_in - 30) * 1000 };
+  console.log("  [Amplience Auth] ✅ Token obtained");
+  return _tokenCache.token;
+}
+
+// ─── 2. CREATE CONTENT ITEM ──────────────────────────────────────────────────
+async function createContentItem(product) {
+  const token   = await getAccessToken();
+  const payload = buildContentPayload(product);
+
+  if (isMockMode()) {
+    console.log(`  [Amplience Create] MOCK — "${product.title}"`);
+    return {
+      id:               `mock-${product.id}-${Date.now()}`,
+      label:            payload.label,
+      status:           "DRAFT",
+      body:             payload.body,
+      version:          1,
+      createdDate:      new Date().toISOString(),
+      lastModifiedDate: new Date().toISOString(),
+      _isMock:          true,
+    };
+  }
+
+  const repoId = process.env.AMPLIENCE_REPO_ID;
+  const hubId  = process.env.AMPLIENCE_HUB_ID;
+  const url    = `${API_BASE}/hubs/${hubId}/content-repositories/${repoId}/content-items`;
+
+  const res = await axios.post(url, payload, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+
+  console.log(`  [Amplience Create] ✅ Created: ${res.data.id}`);
+  return res.data;
+}
+
+// ─── 3. GET CONTENT ITEM ─────────────────────────────────────────────────────
+async function getContentItem(contentItemId) {
+  const token = await getAccessToken();
+
+  if (String(contentItemId).startsWith("mock-")) {
+    return {
+      id:      contentItemId,
+      status:  "DRAFT",
+      label:   "Mock Content Item",
+      body:    { title: "Preview available after real Amplience connection" },
+      _isMock: true,
+    };
+  }
+
+  const res = await axios.get(`${API_BASE}/content-items/${contentItemId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+}
+
+// ─── 4. UPDATE CONTENT ITEM ──────────────────────────────────────────────────
+async function updateContentItem(contentItemId, product) {
+  const token   = await getAccessToken();
+  const payload = buildContentPayload(product);
+
+  if (String(contentItemId).startsWith("mock-")) {
+    console.log(`  [Amplience Update] MOCK — updating ${contentItemId}`);
+    return {
+      id:               contentItemId,
+      label:            payload.label,
+      status:           "DRAFT",
+      body:             payload.body,
+      version:          2,
+      lastModifiedDate: new Date().toISOString(),
+      _isMock:          true,
+    };
+  }
+
+  const res = await axios.patch(
+    `${API_BASE}/content-items/${contentItemId}`,
+    payload,
+    { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
+  );
+
+  console.log(`  [Amplience Update] ✅ Updated: ${contentItemId}`);
+  return res.data;
+}
+
+// ─── 5. PUBLISH CONTENT ITEM ─────────────────────────────────────────────────
+async function publishContentItem(contentItemId) {
+  const token = await getAccessToken();
+
+  if (String(contentItemId).startsWith("mock-")) {
+    console.log(`  [Amplience Publish] MOCK — simulating publish for ${contentItemId}`);
+    return { id: contentItemId, status: "ACTIVE", publishedDate: new Date().toISOString(), _isMock: true };
+  }
+
+  const res = await axios.post(
+    `${API_BASE}/content-items/${contentItemId}/publish`,
+    {},
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  console.log(`  [Amplience Publish] ✅ Published: ${contentItemId}`);
+  return res.data;
+}
+
+// ─── 6. PUSH TO AMPLIENCE (bulk ingestion helper) ────────────────────────────
+// Wraps createContentItem with graceful error handling so a single failure
+// does not abort the entire ingestion pipeline.
 async function pushToAmplience(product) {
-  const payload = {
-    label: product.title,
+  try {
+    const contentItem = await createContentItem(product);
+    console.log(`  [Amplience Push] ✅ "${product.title}" → ${contentItem.id}`);
+    return contentItem;
+  } catch (err) {
+    console.warn(`  [Amplience Push] ⚠ Failed for "${product.title}": ${err.message}`);
+    return null;
+  }
+}
+
+// ─── PAYLOAD BUILDER ─────────────────────────────────────────────────────────
+function buildContentPayload(product) {
+  return {
+    label: `Product — ${product.title}`,
     body: {
-      title: product.title,
-      description: product.description,
-      seoTitle: product.seo_title,
-      tags: product.tags,
-      imageUrl: product.image,
+      _meta: {
+        schema: process.env.AMPLIENCE_SCHEMA_ID ||
+          "https://schema.amplience.net/retail-ai-poc/product.json",
+      },
+      productId:     product.id,
+      title:         product.title,
+      description:   product.description,
+      seoTitle:      product.seo_title,
+      tags:          product.tags          || [],
+      category:      product.category      || "",
+      price:         product.price         || null,
+      imageUrl:      product.image         || "",
+      enrichedAt:    product.enriched_at   || new Date().toISOString(),
+      enrichmentSrc: product.enrichment_source || "mock",
     },
     locale: "en-US",
   };
-
-  // Mock: simulate a network call
-  try {
-    // When real: replace with actual Amplience endpoint
-    await axios.post(
-      process.env.AMPLIENCE_MOCK_URL || "https://httpbin.org/post",
-      payload,
-      { timeout: 3000 }
-    ).catch(() => {}); // swallow mock errors
-  } catch (_) {
-    // Silently fail in mock mode
-  }
-
-  console.log(`  [Amplience] ✅ Pushed: "${product.title}" (id: ${product.id})`);
-  // Uncomment below to see full payload:
-  // console.log("  [Amplience] Payload:", JSON.stringify(payload, null, 2));
 }
 
-module.exports = { pushToAmplience };
+export {
+  getAccessToken,
+  createContentItem,
+  getContentItem,
+  updateContentItem,
+  publishContentItem,
+  pushToAmplience,
+  buildContentPayload,
+};
